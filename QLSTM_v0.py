@@ -4,11 +4,9 @@
 from datetime import datetime
 import time
 
-
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from pandas import DataFrame
-
-import warnings
 
 import pennylane as qml
 import numpy as np
@@ -16,20 +14,13 @@ import numpy as np
 # Saving
 import pickle
 import os
-import copy
-
-# sklearn
-from sklearn.preprocessing import StandardScaler
 
 # Dataset
-
 from data.damped_shm import get_damped_shm_data
 
 # PyTorch
 import torch
 import torch.nn as nn
-import torch.optim as optim
-
 
 ##
 ### Training routine
@@ -108,7 +99,7 @@ def plotting_data(exp_name, exp_index, file_name, iteration_list, train_loss_lis
 	ax.set(xlabel='Epoch', 
 		   title=exp_name)
 	fig.savefig(exp_name + "/" + file_name + "_" + "loss" + "_"+ datetime.now().strftime("NO%Y%m%d%H%M%S") + ".pdf", format='pdf')
-	plt.clf()
+	plt.close()
 
 	return
 
@@ -120,6 +111,7 @@ def plotting_simulation(exp_name, exp_index, file_name, train_len, simulation_re
 	plt.suptitle(exp_name)
 	# savfig can only be placed BEFORE show()
 	plt.savefig(exp_name + "/" + file_name + "_" + "simulation" + "_"+ datetime.now().strftime("NO%Y%m%d%H%M%S") + ".pdf", format='pdf')
+	plt.close()
 	return
 
 
