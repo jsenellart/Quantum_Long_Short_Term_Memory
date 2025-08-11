@@ -16,7 +16,7 @@ import pickle
 import os
 
 # Dataset
-from data.damped_shm import get_damped_shm_data
+from data import data
 
 # PyTorch
 import torch
@@ -67,11 +67,11 @@ def saving(exp_name, exp_index, train_len, iteration_list, train_loss_list, test
 		os.makedirs(exp_name)
 
 	# Save the train loss list
-	with open(exp_name + "/" + file_name + "_TRAINING_LOST" + ".txt", "wb") as fp:
+	with open(exp_name + "/" + file_name + "_TRAINING_LOSS" + ".txt", "wb") as fp:
 		pickle.dump(train_loss_list, fp)
 
 	# Save the test loss list
-	with open(exp_name + "/" + file_name + "_TESTING_LOST" + ".txt", "wb") as fp:
+	with open(exp_name + "/" + file_name + "_TESTING_LOSS" + ".txt", "wb") as fp:
 		pickle.dump(test_loss_list, fp)
 
 	# Save the simulation result
@@ -300,126 +300,136 @@ class CustomLSTM(nn.Module):
 		return outputs, (h_t, c_t)
 
 
-def main():
-
-	torch.manual_seed(0)
-
-	#
-
+def run_experiment(
+	generator_name='damped_shm',
+	model_type='qlstm',
+	seq_length=4,
+	hidden_size=5,
+	batch_size=10,
+	epochs=100,
+	learning_rate=0.01,
+	train_split=0.67,
+	vqc_depth=5,
+	exp_name=None,
+	exp_index=1,
+	seed=0,
+	**generator_kwargs
+):
+	torch.manual_seed(seed)
+	
+	# Generate experiment name if not provided
+	if exp_name is None:
+		exp_name = f"{model_type.upper()}_TS_MODEL_{generator_name.upper()}_1"
+	
 	dtype = torch.DoubleTensor
-
-	x, y = get_damped_shm_data()
-
-	num_for_train_set = int(0.67 * len(x))
-
+	
+	# Get data using the new factory system
+	generator = data.get(generator_name, **generator_kwargs)
+	x, y = generator.get_data(seq_len=seq_length)
+	
+	num_for_train_set = int(train_split * len(x))
+	
 	x_train = x[:num_for_train_set].type(dtype)
 	y_train = y[:num_for_train_set].type(dtype)
-
+	
 	x_test = x[num_for_train_set:].type(dtype)
 	y_test = y[num_for_train_set:].type(dtype)
-
-	print("x_train: ", x_train)
-	print("x_test: ", x_test)
+	
 	print("x_train.shape: ", x_train.shape)
 	print("x_test.shape: ", x_test.shape)
-
+	
 	x_train_transformed = x_train.unsqueeze(2)
 	x_test_transformed = x_test.unsqueeze(2)
-
-	print("x_train: ", x_train_transformed)
-	print("x_test: ", x_test_transformed)
-	print("x_train.shape: ", x_train_transformed.shape)
-	print("x_test.shape: ", x_test_transformed.shape)
-
-	print(x_train[0])
-	print(x_train_transformed[0])
-
+	
+	print("x_train_transformed.shape: ", x_train_transformed.shape)
+	print("x_test_transformed.shape: ", x_test_transformed.shape)
 	print("y.shape: {}".format(y.shape))
-
-
-	# Example usage
+	
+	# Model setup
 	input_size = 1
-	hidden_size = 5
-	seq_length = 4
-	batch_size = 10
-
 	output_size = 1
-
-	qnn_depth = 5
-	qlstm_cell = CustomQLSTMCell(input_size, hidden_size, output_size, qnn_depth).double()
 	
-
-	model = CustomLSTM(input_size, hidden_size, qlstm_cell).double()
+	# Create appropriate cell type
+	if model_type.lower() == 'qlstm':
+		cell = CustomQLSTMCell(input_size, hidden_size, output_size, vqc_depth).double()
+		print(f"Using QLSTM with VQC depth: {vqc_depth}")
+	elif model_type.lower() == 'lstm':
+		cell = CustomLSTMCell(input_size, hidden_size, output_size).double()
+		print("Using classical LSTM")
+	else:
+		raise ValueError(f"Unknown model type: {model_type}. Choose 'qlstm' or 'lstm'")
 	
+	model = CustomLSTM(input_size, hidden_size, cell).double()
+	
+	# Test forward pass
 	input_data = torch.randn(batch_size, seq_length, input_size).double()
-
-	# Forward pass
 	output, (h_n, c_n) = model(input_data)
-
-	print("Output shape:", output.shape)  # [batch_size, seq_length, hidden_size]
-	print("Hidden state shape:", h_n.shape)  # [batch_size, hidden_size]
-	print("Cell state shape:", c_n.shape)  # [batch_size, hidden_size]
-
-	print("Output BEFORE transpose: {}".format(output))
-
-	output = output.transpose(0,1)
-	print("Output shape:", output.shape)
-	print("Output AFTER transpose: {}".format(output))
-
-	print(output[-1])
-
-	# Check the trainable parameters
-	print("Show the parameters in QLSTM.")
+	
+	print("Model output shape:", output.shape)
+	print("Hidden state shape:", h_n.shape)
+	print("Cell state shape:", c_n.shape)
+	
+	# Check trainable parameters
+	print(f"Trainable parameters in {model_type.upper()}:")
+	total_params = 0
 	for name, param in model.named_parameters():
 		if param.requires_grad:
-			print(f"Parameter name: {name}")
-			print(f"Parameter shape: {param.shape}")
-			# print(f"Parameter grad: {param.grad}")
-			# print(f"Parameter value: {param.data}\n")
-
-	##
-
-	exp_name = "QLSTM_TS_MODEL_DAMPED_SHM_1"
-	exp_index = 1
+			param_count = param.numel()
+			total_params += param_count
+			print(f"  {name}: {param.shape} ({param_count} params)")
+	print(f"Total trainable parameters: {total_params}")
+	
+	# Training setup
 	train_len = len(x_train_transformed)
-
-
-	opt = torch.optim.RMSprop(model.parameters(), lr=0.01, alpha=0.99, eps=1e-08, weight_decay=0, momentum=0, centered=False)
+	opt = torch.optim.RMSprop(model.parameters(), lr=learning_rate, alpha=0.99, eps=1e-08, weight_decay=0, momentum=0, centered=False)
 	
 	train_loss_for_all_epoch = []
 	test_loss_for_all_epoch = []
 	iteration_list = []
-
-	for i in range(100):
+	
+	print(f"\nStarting training for {epochs} epochs...")
+	print(f"Generator: {generator_name}, Model: {model_type.upper()}, Hidden size: {hidden_size}, Seq length: {seq_length}")
+	
+	for i in range(epochs):
 		iteration_list.append(i + 1)
-		train_loss_epoch = train_epoch_full(opt = opt, model = model, X = x_train_transformed, Y = y_train, batch_size = 10)
-
-
+		train_loss_epoch = train_epoch_full(opt=opt, model=model, X=x_train_transformed, Y=y_train, batch_size=batch_size)
+		
 		# Calculate test loss
 		test_loss = nn.MSELoss()
 		model_res_test, _ = model(x_test_transformed)
-		test_loss_val = test_loss(model_res_test.transpose(0,1)[-1], y_test).detach().numpy() # 2024 11 11: .transpose(0,1)
-		print("TEST LOSS at {}-th epoch: {}".format(i, test_loss_val))
-
+		test_loss_val = test_loss(model_res_test.transpose(0,1)[-1], y_test).detach().numpy()
+		
+		if (i + 1) % 10 == 0:
+			print(f"Epoch {i+1}: Train Loss: {train_loss_epoch:.6f}, Test Loss: {test_loss_val:.6f}")
+		
 		train_loss_for_all_epoch.append(train_loss_epoch)
 		test_loss_for_all_epoch.append(test_loss_val)
-
-		# Run the test
+		
+		# Run full prediction
 		test_run_res, _ = model(x.type(dtype).unsqueeze(2))
-		total_res = test_run_res.transpose(0,1)[-1].detach().cpu().numpy() # 2024 11 11: .transpose(0,1)
+		total_res = test_run_res.transpose(0,1)[-1].detach().cpu().numpy()
 		ground_truth_y = y.clone().detach().cpu()
-
+		
+		# Save results
 		saving(
-				exp_name = exp_name, 
-				exp_index = exp_index, 
-				train_len = train_len, 
-				iteration_list = iteration_list, 
-				train_loss_list = train_loss_for_all_epoch, 
-				test_loss_list = test_loss_for_all_epoch, 
-				model = model, 
-				simulation_result = total_res, 
-				ground_truth = ground_truth_y)
+			exp_name=exp_name,
+			exp_index=exp_index,
+			train_len=train_len,
+			iteration_list=iteration_list,
+			train_loss_list=train_loss_for_all_epoch,
+			test_loss_list=test_loss_for_all_epoch,
+			model=model,
+			simulation_result=total_res,
+			ground_truth=ground_truth_y
+		)
+	
+	print(f"Training completed! Final test loss: {test_loss_for_all_epoch[-1]:.6f}")
+	return model, train_loss_for_all_epoch, test_loss_for_all_epoch
 
+
+def main():
+	# Default experiment - backward compatible
+	run_experiment()
 	return
 
 
