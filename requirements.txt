@@ -1,6 +1,8 @@
 matplotlib
 pennylane
+pennylane-qulacs
 numpy
 torch
 scikit-learn
+
 

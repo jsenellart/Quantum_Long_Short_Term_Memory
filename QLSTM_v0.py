@@ -175,7 +175,7 @@ class VQC(nn.Module):
 	def __init__(self, vqc_depth, n_qubits, n_class):
 		super().__init__()
 		self.weights = nn.Parameter(0.01 * torch.randn(vqc_depth, n_qubits))  # g rotation params
-		self.dev = qml.device("default.qubit", wires=n_qubits)  # Can use different simulation backend or quantum computers.
+		self.dev = qml.device("qulacs.simulator", wires=n_qubits)  # Can use different simulation backend or quantum computers.
 		self.VQC = qml.QNode(q_function, self.dev, interface = "torch")
 
 		self.n_class = n_class
