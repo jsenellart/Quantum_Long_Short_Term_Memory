@@ -1,6 +1,7 @@
 from typing import Dict, Type, Any
 from .base import DataGenerator
-from .generators import SinGenerator, CosGenerator, LinearGenerator, ExponentialGenerator, DampedSHMGenerator, BesselJ2Generator
+from .generators import SinGenerator, CosGenerator, LinearGenerator, ExponentialGenerator, DampedSHMGenerator,\
+                        BesselJ2Generator, AirlinePassengersGenerator
 
 class DataFactory:
     _generators: Dict[str, Type[DataGenerator]] = {
@@ -10,8 +11,10 @@ class DataFactory:
         'linear': LinearGenerator,
         'exp': ExponentialGenerator,
         'exponential': ExponentialGenerator,
-        'bessel_j2': BesselJ2Generator
+        'bessel_j2': BesselJ2Generator,
+        'airline_passengers': AirlinePassengersGenerator
     }
+
     
     @classmethod
     def register_generator(cls, name: str, generator_class: Type[DataGenerator]):

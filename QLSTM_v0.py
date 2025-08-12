@@ -55,9 +55,12 @@ def train_epoch_full(opt, model, X, Y, batch_size):
 
 ### Plotting and Saving
 
-def saving(exp_name, exp_index, train_len, iteration_list, train_loss_list, test_loss_list, model, simulation_result, ground_truth):
+def saving(exp_name, exp_index, train_len, iteration_list, train_loss_list, test_loss_list, model, simulation_result, ground_truth, run_datetime, fformat="pdf"):
 	# Generate file name
-	file_name = exp_name + "_NO_" + str(exp_index) + "_Epoch_" + str(iteration_list[-1])
+	# Extract the last directory name from exp_name if it's a path
+	base_exp_name = os.path.basename(os.path.normpath(exp_name))
+	file_name = base_exp_name + "_NO_" + str(exp_index) + "_Epoch_" + str(iteration_list[-1])
+
 	saved_simulation_truth = {
 	"simulation_result" : simulation_result,
 	"ground_truth" : ground_truth
@@ -82,13 +85,13 @@ def saving(exp_name, exp_index, train_len, iteration_list, train_loss_list, test
 	torch.save(model.state_dict(), exp_name + "/" +  file_name + "_torch_model.pth")
 
 	# Plot
-	plotting_data(exp_name, exp_index, file_name, iteration_list, train_loss_list, test_loss_list)
-	plotting_simulation(exp_name, exp_index, file_name, train_len, simulation_result, ground_truth)
+	plotting_data(exp_name, exp_index, file_name, iteration_list, train_loss_list, test_loss_list, run_datetime, fformat)
+	plotting_simulation(exp_name, exp_index, file_name, train_len, simulation_result, ground_truth, run_datetime, fformat)
 
 	return
 
 
-def plotting_data(exp_name, exp_index, file_name, iteration_list, train_loss_list, test_loss_list):
+def plotting_data(exp_name, exp_index, file_name, iteration_list, train_loss_list, test_loss_list, run_datetime, fformat="pdf"):
 	# Plot train and test loss
 	fig, ax = plt.subplots()
 	# plt.yscale('log')
@@ -98,19 +101,19 @@ def plotting_data(exp_name, exp_index, file_name, iteration_list, train_loss_lis
 
 	ax.set(xlabel='Epoch', 
 		   title=exp_name)
-	fig.savefig(exp_name + "/" + file_name + "_" + "loss" + "_"+ datetime.now().strftime("NO%Y%m%d%H%M%S") + ".pdf", format='pdf')
+	fig.savefig(exp_name + "/" + file_name + "_" + "loss" + "_"+ run_datetime + "."+fformat, format=fformat)
 	plt.close()
 
 	return
 
-def plotting_simulation(exp_name, exp_index, file_name, train_len, simulation_result, ground_truth):
+def plotting_simulation(exp_name, exp_index, file_name, train_len, simulation_result, ground_truth, run_datetime, fformat="pdf"):
 	# Plot the simulation
 	plt.axvline(x=train_len, c='r', linestyle='--')
 	plt.plot(simulation_result, '-')
 	plt.plot(ground_truth.detach().numpy(), '--')
 	plt.suptitle(exp_name)
 	# savfig can only be placed BEFORE show()
-	plt.savefig(exp_name + "/" + file_name + "_" + "simulation" + "_"+ datetime.now().strftime("NO%Y%m%d%H%M%S") + ".pdf", format='pdf')
+	plt.savefig(exp_name + "/" + file_name + "_" + "simulation" + "_"+ run_datetime + "."+fformat, format=fformat)
 	plt.close()
 	return
 
@@ -313,13 +316,19 @@ def run_experiment(
 	exp_name=None,
 	exp_index=1,
 	seed=0,
+	fformat="pdf",
+	run_datetime=None,
 	**generator_kwargs
 ):
 	torch.manual_seed(seed)
 	
 	# Generate experiment name if not provided
 	if exp_name is None:
-		exp_name = f"{model_type.upper()}_TS_MODEL_{generator_name.upper()}_1"
+		exp_name = f"experiments/{model_type.upper()}_TS_MODEL_{generator_name.upper()}_1"
+
+	# Générer la date/heure de début d'entraînement (unique pour ce run)
+	if run_datetime is None:
+		run_datetime = datetime.now().strftime("NO%Y%m%d%H%M%S")
 	
 	dtype = torch.DoubleTensor
 	
@@ -420,11 +429,14 @@ def run_experiment(
 			test_loss_list=test_loss_for_all_epoch,
 			model=model,
 			simulation_result=total_res,
-			ground_truth=ground_truth_y
+			ground_truth=ground_truth_y,
+			run_datetime=run_datetime,
+			fformat=fformat
 		)
 	
 	print(f"Training completed! Final test loss: {test_loss_for_all_epoch[-1]:.6f}")
-	return model, train_loss_for_all_epoch, test_loss_for_all_epoch
+	last_epoch = iteration_list[-1] if iteration_list else None
+	return model, train_loss_for_all_epoch, test_loss_for_all_epoch, exp_name, run_datetime, last_epoch
 
 
 def main():
