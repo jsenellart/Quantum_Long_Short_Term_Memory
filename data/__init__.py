@@ -1,7 +1,8 @@
 from typing import Dict, Type, Any
 from .base import DataGenerator
 from .generators import SinGenerator, CosGenerator, LinearGenerator, ExponentialGenerator, DampedSHMGenerator,\
-                        BesselJ2Generator, AirlinePassengersGenerator
+                        BesselJ2Generator, AirlinePassengersGenerator,\
+                        PopulationInversionGenerator, PopulationInversionCollapseRevivalGenerator
 
 class DataFactory:
     _generators: Dict[str, Type[DataGenerator]] = {
@@ -12,7 +13,9 @@ class DataFactory:
         'exp': ExponentialGenerator,
         'exponential': ExponentialGenerator,
         'bessel_j2': BesselJ2Generator,
-        'airline_passengers': AirlinePassengersGenerator
+        'airline_passengers': AirlinePassengersGenerator,
+        'population_inversion': PopulationInversionGenerator,
+        'population_inversion_collapse_revival': PopulationInversionCollapseRevivalGenerator
     }
 
     

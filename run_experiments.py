@@ -63,6 +63,7 @@ def create_summary_figure(results, filename="experiments/summary_lstm_experiment
             axes[1, col].set_visible(False)
     plt.tight_layout()
     plt.savefig(filename, dpi=300)
+    plt.close()
 
 
 def lstm_progression_figure(generator, filename, epochs_to_plot=None, epochs=100, **run_experiment_kwargs):
@@ -113,29 +114,7 @@ def lstm_progression_figure(generator, filename, epochs_to_plot=None, epochs=100
     plt.savefig(filename, dpi=300)
     plt.close()  # Close the figure to free memory
 
-def lstm_sin_progression_figure(filename="experiments/lstm_sin_progression.png"):
-    """
-    Trains an LSTM on sin and generates a figure with the simulations at epochs 1, 15, 30, 100
-    and the final loss curve on the right.
-    """
 
-    epochs_to_plot = [1, 15, 30, 100]
-    epochs = 100
-    generator = 'sin'
-    exp_name = f'experiments/LSTM_TS_MODEL_{generator.upper()}_HIDDEN_5'
-    lstm_progression_figure(generator, filename, epochs_to_plot=epochs_to_plot, epochs=epochs)
-
-def lstm_airline_passengers_figure(filename="experiments/lstm_airline_passengers.png"):
-    """
-    Train an LSTM on the airline-passengers dataset and generate a figure with the loss and simulation results at epochs 1, 15, 30, 100.
-    """
-
-    epochs_to_plot = [1, 15, 30, 100]
-    epochs = 100
-    generator = 'airline_passengers'
-    exp_name = f'experiments/LSTM_TS_MODEL_{generator.upper()}_HIDDEN_5'
-
-    lstm_progression_figure(generator, filename, epochs_to_plot=epochs_to_plot, epochs=epochs)
 
 def compare_models():
     """Compare QLSTM vs LSTM on the same dataset"""
@@ -175,7 +154,46 @@ def compare_models():
     print(f"LSTM  - Train Loss: {lstm_train_loss[-1]:.6f}, Test Loss: {lstm_test_loss[-1]:.6f}")
 
 if __name__ == '__main__':
-    lstm_airline_passengers_figure()
-    lstm_sin_progression_figure()
+    # Example: Bessel progression
+    lstm_progression_figure(
+        generator='bessel_j2',
+        filename="experiments/lstm_bessel_progression.png",
+        epochs_to_plot=[1, 15, 30, 100],
+        epochs=100
+    )
+
+    # Example: Sin progression
+    lstm_progression_figure(
+        generator='sin',
+        filename="experiments/lstm_sin_progression.png",
+        epochs_to_plot=[1, 15, 30, 100],
+        epochs=100
+    )
+
+    # Example: Airline passengers progression
+    lstm_progression_figure(
+        generator='airline_passengers',
+        filename="experiments/lstm_airline_passengers_progression.png",
+        epochs_to_plot=[1, 15, 30, 100],
+        epochs=100
+    )
+
+    # Example: Population inversion revival
+    lstm_progression_figure(
+        generator='population_inversion_collapse_revival',
+        filename="experiments/lstm_population_inversion_collapse_revival_progression.png",
+        epochs_to_plot=[1, 15, 30, 100],
+        epochs=100
+    )
+
+    # Example: Population inversion revival
+    lstm_progression_figure(
+        generator='damped_shm',
+        filename="experiments/lstm_damped_shm_progression.png",
+        epochs_to_plot=[1, 15, 30, 100],
+        epochs=100
+    )
+
+    # Example: Run all LSTM experiments
     #example_lstm_experiments()
     #compare_models()

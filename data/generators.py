@@ -100,7 +100,7 @@ class DampedSHMGenerator(DataGenerator):
         return t, theta[:, 1]
 
 class BesselJ2Generator(DataGenerator):
-    def __init__(self, amplitude=1.0, x_scale=1.0, x_max=20, n_points=240, noise_std=0.0):
+    def __init__(self, amplitude=1.0, x_scale=5.0, x_max=20, n_points=240, noise_std=0.0):
         super().__init__("Bessel J_2")
         self.amplitude = amplitude
         self.x_scale = x_scale
@@ -141,3 +141,53 @@ class AirlinePassengersGenerator(DataGenerator):
         t = np.arange(len(self._df))
         data = self._df['Passengers'].values.astype(float)
         return t, data
+
+class PopulationInversionGenerator(DataGenerator):
+    """
+    Generator for the population inversion of a two-level system (Jaynes-Cummings model),
+    as in https://arxiv.org/pdf/2009.01783 (see Eq. 1 and related text).
+    W(t) = cos(omega * t)
+    """
+    def __init__(self, omega=1.0, amplitude=1.0, t_max=1000, n_points=240, noise_std=0.0):
+        super().__init__("Population Inversion (Jaynes-Cummings)")
+        self.omega = omega
+        self.amplitude = amplitude
+        self.t_max = t_max
+        self.n_points = n_points
+        self.noise_std = noise_std
+
+    def generate_raw_data(self) -> Tuple[np.ndarray, np.ndarray]:
+        t = np.linspace(0, self.t_max, self.n_points)
+        data = self.amplitude * np.cos(self.omega * t)
+        if self.noise_std > 0:
+            data += np.random.normal(0, self.noise_std, len(data))
+        return t, data
+
+from scipy.stats import poisson
+
+class PopulationInversionCollapseRevivalGenerator(DataGenerator):
+    """
+    Generator for Jaynes-Cummings population inversion with collapse and revival (Eq. 15 in arXiv:2009.01783).
+    W(t) = sum_n P_n * cos(2 * g * t * sqrt(n+1)),
+    where P_n is Poissonian (mean_n), g is the coupling.
+    """
+    def __init__(self, mean_n=40, g=1.0, t_max=200, n_points=2500, n_max=100, noise_std=0.0):
+        super().__init__("Population Inversion (Collapse & Revival)")
+        self.mean_n = mean_n
+        self.g = g
+        self.t_max = t_max
+        self.n_points = n_points
+        self.n_max = n_max if n_max is not None else int(mean_n + 8 * np.sqrt(mean_n))  # cover most of the Poisson weight
+        self.noise_std = noise_std
+
+    def generate_raw_data(self) -> Tuple[np.ndarray, np.ndarray]:
+        t = np.linspace(0, self.t_max, self.n_points)
+        n_vals = np.arange(0, self.n_max+1)
+        P_n = poisson.pmf(n_vals, self.mean_n)
+        # Outer product: shape (len(t), len(n_vals))
+        cos_terms = np.cos(2 * self.g * np.outer(t, np.sqrt(n_vals+1)))
+        # Weighted sum over n for each t
+        W_t = np.dot(cos_terms, P_n)
+        if self.noise_std > 0:
+            W_t += np.random.normal(0, self.noise_std, len(W_t))
+        return t, W_t
