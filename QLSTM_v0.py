@@ -55,11 +55,16 @@ def train_epoch_full(opt, model, X, Y, batch_size):
 
 ### Plotting and Saving
 
-def saving(exp_name, exp_index, train_len, iteration_list, train_loss_list, test_loss_list, model, simulation_result, ground_truth, run_datetime, fformat="pdf"):
+def saving(exp_name, exp_index, train_len, iteration_list, train_loss_list, test_loss_list, model, simulation_result, ground_truth, run_datetime,
+		   fformat="pdf", save_progress_index=False):
 	# Generate file name
 	# Extract the last directory name from exp_name if it's a path
 	base_exp_name = os.path.basename(os.path.normpath(exp_name))
 	file_name = base_exp_name + "_NO_" + str(exp_index) + "_Epoch_" + str(iteration_list[-1])
+	if not(save_progress_index):
+		file_name_progress = base_exp_name + "_NO_last"
+	else:
+		file_name_progress = file_name
 
 	saved_simulation_truth = {
 	"simulation_result" : simulation_result,
@@ -70,11 +75,11 @@ def saving(exp_name, exp_index, train_len, iteration_list, train_loss_list, test
 		os.makedirs(exp_name)
 
 	# Save the train loss list
-	with open(exp_name + "/" + file_name + "_TRAINING_LOSS" + ".txt", "wb") as fp:
+	with open(exp_name + "/" + file_name_progress + "_TRAINING_LOSS" + ".txt", "wb") as fp:
 		pickle.dump(train_loss_list, fp)
 
 	# Save the test loss list
-	with open(exp_name + "/" + file_name + "_TESTING_LOSS" + ".txt", "wb") as fp:
+	with open(exp_name + "/" + file_name_progress + "_TESTING_LOSS" + ".txt", "wb") as fp:
 		pickle.dump(test_loss_list, fp)
 
 	# Save the simulation result
@@ -85,13 +90,13 @@ def saving(exp_name, exp_index, train_len, iteration_list, train_loss_list, test
 	torch.save(model.state_dict(), exp_name + "/" +  file_name + "_torch_model.pth")
 
 	# Plot
-	plotting_data(exp_name, exp_index, file_name, iteration_list, train_loss_list, test_loss_list, run_datetime, fformat)
-	plotting_simulation(exp_name, exp_index, file_name, train_len, simulation_result, ground_truth, run_datetime, fformat)
+	plotting_data(exp_name, file_name_progress, iteration_list, train_loss_list, test_loss_list, run_datetime, fformat)
+	plotting_simulation(exp_name, file_name, train_len, simulation_result, ground_truth, run_datetime, fformat)
 
 	return
 
 
-def plotting_data(exp_name, exp_index, file_name, iteration_list, train_loss_list, test_loss_list, run_datetime, fformat="pdf"):
+def plotting_data(exp_name, file_name, iteration_list, train_loss_list, test_loss_list, run_datetime, fformat="pdf"):
 	# Plot train and test loss
 	fig, ax = plt.subplots()
 	# plt.yscale('log')
@@ -106,7 +111,7 @@ def plotting_data(exp_name, exp_index, file_name, iteration_list, train_loss_lis
 
 	return
 
-def plotting_simulation(exp_name, exp_index, file_name, train_len, simulation_result, ground_truth, run_datetime, fformat="pdf"):
+def plotting_simulation(exp_name, file_name, train_len, simulation_result, ground_truth, run_datetime, fformat="pdf"):
 	# Plot the simulation
 	plt.axvline(x=train_len, c='r', linestyle='--')
 	plt.plot(simulation_result, '-')
@@ -318,13 +323,115 @@ def run_experiment(
 	seed=0,
 	fformat="pdf",
 	run_datetime=None,
+	save_only_last_progress=True,
 	**generator_kwargs
 ):
+	"""Run a single training experiment (LSTM or QLSTM) on a chosen time-series generator.
+
+	Parameters
+	----------
+	generator_name : str, default 'damped_shm'
+		Name of the registered data generator (see ``data/generators.py``). Examples: 'sin', 'linear',
+		'exp', 'bessel_j2', 'airline_passengers', 'population_inversion_collapse_revival'.
+	model_type : {'qlstm','lstm'}, default 'qlstm'
+		Model variant. 'qlstm' uses quantum variational circuits inside the gating mechanism; 'lstm'
+		uses a classical fully-connected implementation.
+	seq_length : int, default 4
+		Length of the input sliding window used to predict the next value.
+	hidden_size : int, default 5
+		Dimension of the hidden state (and cell state) of the (Q)LSTM cell.
+	batch_size : int, default 10
+		Batch size used in each optimization step.
+	epochs : int, default 100
+		Number of training epochs.
+	learning_rate : float, default 0.01
+		Learning rate for the RMSprop optimizer.
+	train_split : float in (0,1], default 0.67
+		Fraction of the dataset used for training; the remainder is used for testing.
+	vqc_depth : int, default 5
+		(QLSTM only) Number of variational layers of the quantum circuit per gate.
+	exp_name : str or None, default None
+		Base directory for saving artifacts. If None, a name is auto-generated as
+		``experiments/<MODEL>_TS_MODEL_<GENERATOR>``.
+	exp_index : int, default 1
+		Index appended in file names (``_NO_<exp_index>``) to distinguish multiple runs in the
+		same folder.
+	seed : int, default 0
+		Random seed for PyTorch (affects weight initialization and any generator randomness).
+	fformat : {'pdf','png'}, default 'pdf'
+		Output file format for saved figures.
+	run_datetime : str or None, default None
+		If provided, used as the unique timestamp token embedded in all artifact filenames;
+		otherwise generated once at the start (format ``NOYYYYMMDDHHMMSS``). Passing an explicit
+		value enables reproducible aggregation (e.g., multi-seed summaries).
+	save_only_last_progress : bool, default True
+		If True, intermediate epoch artifacts keep overwriting the ``_NO_last`` training/test
+		curves until the final epoch is also saved with its explicit epoch number. If False,
+		all epochs generate distinct loss & simulation figures.
+	**generator_kwargs : dict
+		Extra keyword arguments forwarded to the data generator factory (e.g., amplitude,
+		frequency for sine waves, mean_photon_number for collapse/revival, etc.).
+
+	Returns
+	-------
+	(model, train_loss_list, test_loss_list, exp_name, run_datetime, last_epoch)
+		model : torch.nn.Module
+			The trained (Q)LSTM model instance (on CPU).
+		train_loss_list : list[float]
+			Per-epoch training loss (MSE) values.
+		test_loss_list : list[float]
+			Per-epoch testing loss (MSE) values.
+		exp_name : str
+			Experiment output directory actually used.
+		run_datetime : str
+			Timestamp token shared by all artifact filenames for this run.
+		last_epoch : int
+			Index of the final epoch (== ``epochs`` if training completed).
+
+	Side Effects
+	------------
+	Creates (if needed) the directory ``exp_name`` and writes:
+		* Loss curves (``..._loss_<timestamp>.<fformat>``)
+		* Prediction vs ground-truth plots (``..._simulation_<timestamp>.<fformat>``)
+		* Serialized lists of training & testing losses (pickle)
+		* Simulation results (pickle)
+		* Torch model state dict (``..._torch_model.pth``)
+
+	File Naming
+	-----------
+	Files follow the pattern:
+	``<EXP_NAME>/<BASE>_NO_<exp_index>_Epoch_<E>_<TYPE>_<run_datetime>.<fformat>`` where
+	``TYPE`` is one of ``loss`` or ``simulation``. A convenience alias ``_NO_last`` is used
+	for progressive loss curves if ``save_only_last_progress`` is True.
+
+	Raises
+	------
+	ValueError
+		If an unknown ``model_type`` is supplied.
+
+	Notes
+	-----
+	* Uses RMSprop (matching many quantum ML baselines) for stable convergence.
+	* The quantum sub-module leverages PennyLane with the ``qulacs.simulator`` device.
+	* Loss metric: Mean Squared Error on the last time-step prediction of each sequence.
+
+	Examples
+	--------
+	Basic LSTM:
+	>>> run_experiment(model_type='lstm', generator_name='sin', epochs=50, hidden_size=8)
+
+	QLSTM with custom quantum depth and sine generator parameters:
+	>>> run_experiment(model_type='qlstm', generator_name='sin', frequency=1.5, amplitude=0.8, vqc_depth=4)
+
+	Multiple seeds (outer loop example):
+	>>> for s in range(5):
+	...     run_experiment(model_type='lstm', generator_name='bessel_j2', seed=s, run_datetime=None)
+	"""
 	torch.manual_seed(seed)
 	
 	# Generate experiment name if not provided
 	if exp_name is None:
-		exp_name = f"experiments/{model_type.upper()}_TS_MODEL_{generator_name.upper()}_1"
+		exp_name = f"experiments/{model_type.upper()}_TS_MODEL_{generator_name.upper()}"
 
 	# Générer la date/heure de début d'entraînement (unique pour ce run)
 	if run_datetime is None:
@@ -431,7 +538,8 @@ def run_experiment(
 			simulation_result=total_res,
 			ground_truth=ground_truth_y,
 			run_datetime=run_datetime,
-			fformat=fformat
+			fformat=fformat,
+			save_progress_index=(i == epochs-1) or not(save_only_last_progress)
 		)
 	
 	print(f"Training completed! Final test loss: {test_loss_for_all_epoch[-1]:.6f}")

@@ -66,6 +66,51 @@ def create_summary_figure(results, filename="experiments/summary_lstm_experiment
     plt.close()
 
 
+def lstm_random_seeds(nseeds, generator, epochs=100, **run_experiment_kwargs):
+    exp_name = f'experiments/LSTM_RANDOM_SEEDS_MODEL_{generator.upper()}'
+    train_losses = []
+    test_losses = []
+    for seed in range(nseeds):
+        model, train_loss, test_loss, exp_name, run_datetime, last_epoch = run_experiment(
+            model_type='lstm',
+            epochs=epochs,
+            batch_size=32,
+            hidden_size=5,
+            generator_name=generator,
+            exp_name=exp_name,
+            fformat="png",
+            seed=seed,
+            **run_experiment_kwargs
+        )
+        train_losses.append(train_loss)
+        test_losses.append(test_loss)
+
+    # Convert to numpy arrays for easier manipulation
+    import numpy as np
+    train_losses = np.array(train_losses)  # shape (nseeds, epochs)
+    test_losses = np.array(test_losses)
+    epochs_range = np.arange(1, epochs+1)
+
+    # Plot average and envelope
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    fig.suptitle(f"LSTM Loss Envelope over {nseeds} Seeds ({generator})", fontsize=16)
+    for ax, losses, label in zip(axes, [train_losses, test_losses], ["Training Loss", "Testing Loss"]):
+        mean_loss = np.mean(losses, axis=0)
+        std_loss = np.std(losses, axis=0)
+        min_loss = np.min(losses, axis=0)
+        max_loss = np.max(losses, axis=0)
+        ax.plot(epochs_range, mean_loss, label="Average")
+        ax.fill_between(epochs_range, mean_loss-std_loss, mean_loss+std_loss, color="blue", alpha=0.2, label="Std Dev")
+        ax.fill_between(epochs_range, min_loss, max_loss, color="gray", alpha=0.3, label="Envelope (min/max)")
+        ax.set_title(label)
+        ax.set_xlabel("Epoch")
+        ax.set_ylabel("Loss")
+        ax.legend()
+    plt.tight_layout(rect=[0, 0, 1, 0.93])
+    plt.savefig(f"{exp_name}_loss_envelope.png", dpi=300)
+    plt.close()
+
+
 def lstm_progression_figure(generator, filename, epochs_to_plot=None, epochs=100, **run_experiment_kwargs):
     """
     Trains an LSTM on the specified generator and generates a figure with the simulations at selected epochs
@@ -155,44 +200,46 @@ def compare_models():
 
 if __name__ == '__main__':
     # Example: Bessel progression
-    lstm_progression_figure(
-        generator='bessel_j2',
-        filename="experiments/lstm_bessel_progression.png",
-        epochs_to_plot=[1, 15, 30, 100],
-        epochs=100
-    )
+    # lstm_progression_figure(
+    #     generator='bessel_j2',
+    #     filename="experiments/lstm_bessel_progression.png",
+    #     epochs_to_plot=[1, 15, 30, 100],
+    #     epochs=100
+    # )
 
     # Example: Sin progression
-    lstm_progression_figure(
-        generator='sin',
-        filename="experiments/lstm_sin_progression.png",
-        epochs_to_plot=[1, 15, 30, 100],
-        epochs=100
-    )
+    # lstm_progression_figure(
+    #     generator='sin',
+    #     filename="experiments/lstm_sin_progression.png",
+    #     epochs_to_plot=[1, 15, 30, 100],
+    #     epochs=100
+    # )
 
     # Example: Airline passengers progression
-    lstm_progression_figure(
-        generator='airline_passengers',
-        filename="experiments/lstm_airline_passengers_progression.png",
-        epochs_to_plot=[1, 15, 30, 100],
-        epochs=100
-    )
+    # lstm_progression_figure(
+    #     generator='airline_passengers',
+    #     filename="experiments/lstm_airline_passengers_progression.png",
+    #     epochs_to_plot=[1, 15, 30, 100],
+    #     epochs=100
+    # )
 
     # Example: Population inversion revival
-    lstm_progression_figure(
-        generator='population_inversion_collapse_revival',
-        filename="experiments/lstm_population_inversion_collapse_revival_progression.png",
-        epochs_to_plot=[1, 15, 30, 100],
-        epochs=100
-    )
+    # lstm_progression_figure(
+    #     generator='population_inversion_collapse_revival',
+    #     filename="experiments/lstm_population_inversion_collapse_revival_progression.png",
+    #     epochs_to_plot=[1, 15, 30, 100],
+    #     epochs=100
+    # )
 
     # Example: Population inversion revival
-    lstm_progression_figure(
-        generator='damped_shm',
-        filename="experiments/lstm_damped_shm_progression.png",
-        epochs_to_plot=[1, 15, 30, 100],
-        epochs=100
-    )
+    # lstm_progression_figure(
+    #     generator='damped_shm',
+    #     filename="experiments/lstm_damped_shm_progression.png",
+    #     epochs_to_plot=[1, 15, 30, 100],
+    #     epochs=100
+    # )
+
+    lstm_random_seeds(40, generator='sin')
 
     # Example: Run all LSTM experiments
     #example_lstm_experiments()
